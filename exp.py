@@ -5,9 +5,8 @@ import os
 
 st.set_page_config(page_title="💸 Expense Tracker", layout="centered")
 
-# Constants
 CSV_FILE = "expenses.csv"
-CATEGORIES = ["Food", "Entertainment", "Medical", "Shopping", "Groceries", "Travel"]
+CATEGORIES = ["Food", "Entertainment", "Medical", "Shopping", "Groceries", "Travel", "Other"]
 PEOPLE = ["He", "She"]
 
 # 🔐 Password protection
@@ -18,84 +17,88 @@ def check_password():
         else:
             st.session_state["authenticated"] = False
             st.error("😕 Incorrect password")
-
     if "authenticated" not in st.session_state:
         st.session_state["authenticated"] = False
-
     if not st.session_state["authenticated"]:
         st.text_input("🔐 Enter password to access the tracker", type="password", key="password", on_change=password_entered)
         return False
     return True
 
-# Load or create data
+# Load and save data
 def load_data():
     if os.path.exists(CSV_FILE):
         df = pd.read_csv(CSV_FILE)
         df["Timestamp"] = pd.to_datetime(df["Timestamp"], errors="coerce")
         return df
-    else:
-        return pd.DataFrame(columns=["Amount", "Type", "Person", "Timestamp"])
+    return pd.DataFrame(columns=["Amount", "Type", "Person", "Description", "Timestamp"])
 
 def save_data(df):
     df.to_csv(CSV_FILE, index=False)
 
 # Add new entry
-def add_expense(df, amount, category, person):
+def add_expense(df, amount, category, person, description, timestamp):
     new_row = pd.DataFrame({
         "Amount": [amount],
         "Type": [category],
         "Person": [person],
-        "Timestamp": [datetime.now()]
+        "Description": [description],
+        "Timestamp": [timestamp]
     })
     df = pd.concat([df, new_row], ignore_index=True)
     save_data(df)
     return df
 
 # Update existing entry
-def update_expense(df, idx, amount, category, person):
+def update_expense(df, idx, amount, category, person, description, timestamp):
     df.at[idx, "Amount"] = amount
     df.at[idx, "Type"] = category
     df.at[idx, "Person"] = person
+    df.at[idx, "Description"] = description
+    df.at[idx, "Timestamp"] = timestamp
     save_data(df)
     return df
 
-# Delete entry
+# Delete and Clear
 def delete_expense(df, idx):
     df = df.drop(idx).reset_index(drop=True)
     save_data(df)
     return df
 
-# Clear all entries
 def clear_all():
-    empty_df = pd.DataFrame(columns=["Amount", "Type", "Person", "Timestamp"])
+    empty_df = pd.DataFrame(columns=["Amount", "Type", "Person", "Description", "Timestamp"])
     save_data(empty_df)
     return empty_df
 
-# Main app
+# App UI
 def main():
     st.title("💸 Expense Tracker")
-
-    # 🔐 Require password
     if not check_password():
         return
 
     df = load_data()
 
-    # 1. Add new expense
+    # ➕ Add Expense
     with st.expander("➕ Add New Expense", expanded=True):
         with st.form("add_form"):
             amount = st.text_input("Amount (₹)", placeholder="Enter amount")
             category = st.selectbox("Select Expense Type", [""] + CATEGORIES)
-            person = st.selectbox("Select Person", [""] + PEOPLE)
-            submitted = st.form_submit_button("Add Expense")
+            if category == "Other":
+                category = st.text_input("Enter Custom Type")
 
+            person = st.selectbox("Select Person", [""] + PEOPLE)
+            description = st.text_input("Description (optional)", placeholder="e.g. Uber to airport")
+            date = st.date_input("Select Date", value=datetime.today())
+            time = st.time_input("Select Time", value=datetime.now().time())
+            timestamp = datetime.combine(date, time)
+
+            submitted = st.form_submit_button("Add Expense")
             if submitted:
                 if not category or not person:
                     st.warning("Please select both Type and Person.")
                 else:
                     try:
                         amount = float(amount)
-                        df = add_expense(df, amount, category, person)
+                        df = add_expense(df, amount, category, person, description, timestamp)
                         st.success(f"Added ₹{amount:.2f} for {category} by {person}.")
                         st.experimental_rerun()
                     except ValueError:
@@ -105,28 +108,24 @@ def main():
         st.info("No expenses recorded yet.")
         return
 
-    # 2. Show summary metrics
+    # 📊 Metrics
     total_spent = df["Amount"].sum()
     today = pd.Timestamp.now().normalize()
-    month = today.month
-    year = today.year
-
     spent_today = df[df["Timestamp"].dt.normalize() == today]["Amount"].sum()
-    spent_month = df[(df["Timestamp"].dt.month == month) & (df["Timestamp"].dt.year == year)]["Amount"].sum()
+    spent_month = df[(df["Timestamp"].dt.month == today.month) & (df["Timestamp"].dt.year == today.year)]["Amount"].sum()
 
     col1, col2, col3 = st.columns(3)
     col1.metric("🧾 Total Spent", f"₹{total_spent:.2f}")
     col2.metric("📅 Today", f"₹{spent_today:.2f}")
     col3.metric("🗓️ This Month", f"₹{spent_month:.2f}")
 
-    # 3. Expense history with edit/delete
+    # 📜 Expense History
     st.subheader("📜 Expense History")
-    display_df = df.sort_values(by="Timestamp", ascending=False).reset_index()  # preserve original index
-    display_df["Timestamp"] = pd.to_datetime(display_df["Timestamp"], errors="coerce")
-    display_df["Timestamp"] = display_df["Timestamp"].dt.strftime("%Y-%m-%d %H:%M:%S")
+    display_df = df.sort_values(by="Timestamp", ascending=False).reset_index()
+    display_df["Timestamp"] = pd.to_datetime(display_df["Timestamp"]).dt.strftime("%Y-%m-%d %H:%M:%S")
     st.dataframe(display_df.drop(columns="index"), use_container_width=True)
 
-    # Edit/Delete Section
+    # ✏️ Edit/Delete
     st.markdown("---")
     st.subheader("✏️ Edit / Delete Entry")
     idx_options = display_df.index.tolist()
@@ -143,14 +142,22 @@ def main():
         with st.form("edit_form"):
             new_amount = st.number_input("Edit Amount (₹)", min_value=0.01, format="%.2f", value=float(selected_row["Amount"]))
             new_category = st.selectbox("Edit Type", CATEGORIES, index=CATEGORIES.index(selected_row["Type"]) if selected_row["Type"] in CATEGORIES else 0)
+            if new_category == "Other":
+                new_category = st.text_input("Enter Custom Type", value=selected_row["Type"])
+
             new_person = st.selectbox("Edit Person", PEOPLE, index=PEOPLE.index(selected_row["Person"]) if selected_row["Person"] in PEOPLE else 0)
+            new_description = st.text_input("Edit Description", value=selected_row.get("Description", ""))
+            old_datetime = pd.to_datetime(selected_row["Timestamp"])
+            new_date = st.date_input("Edit Date", value=old_datetime.date())
+            new_time = st.time_input("Edit Time", value=old_datetime.time())
+            new_timestamp = datetime.combine(new_date, new_time)
 
             col1, col2 = st.columns([1, 1])
             update_btn = col1.form_submit_button("Update Entry")
             delete_btn = col2.form_submit_button("Delete Entry", help="Warning: This will delete the entry!")
 
             if update_btn:
-                df = update_expense(df, original_idx, new_amount, new_category, new_person)
+                df = update_expense(df, original_idx, new_amount, new_category, new_person, new_description, new_timestamp)
                 st.success("Entry updated successfully!")
                 st.experimental_rerun()
 
@@ -159,11 +166,10 @@ def main():
                 st.success("Entry deleted successfully!")
                 st.experimental_rerun()
 
-    # Clear All Section
+    # 🧹 Clear All
     st.markdown("---")
     st.subheader("🧹 Clear All History")
     confirm = st.checkbox("I confirm to clear all expense history")
-
     if confirm:
         if st.button("Clear History"):
             df = clear_all()
