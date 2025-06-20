@@ -9,7 +9,7 @@ CSV_FILE = "expenses.csv"
 CATEGORIES = ["Food", "Entertainment", "Medical", "Shopping", "Groceries", "Travel", "Other"]
 PEOPLE = ["He", "She"]
 
-# Rerun handler for compatibility
+# Handle rerun compatibility
 def rerun():
     if hasattr(st, "rerun"):
         st.rerun()
@@ -31,7 +31,7 @@ def check_password():
         return False
     return True
 
-# Load and save data
+# Load and save
 def load_data():
     if os.path.exists(CSV_FILE):
         df = pd.read_csv(CSV_FILE)
@@ -42,8 +42,9 @@ def load_data():
 def save_data(df):
     df.to_csv(CSV_FILE, index=False)
 
-# Data operations
-def add_expense(df, amount, category, person, description, timestamp):
+# Add/update/delete
+def add_expense(df, amount, category, person, description):
+    timestamp = datetime.now()
     new_row = pd.DataFrame({
         "Amount": [amount],
         "Type": [category],
@@ -55,12 +56,11 @@ def add_expense(df, amount, category, person, description, timestamp):
     save_data(df)
     return df
 
-def update_expense(df, idx, amount, category, person, description, timestamp):
+def update_expense(df, idx, amount, category, person, description):
     df.at[idx, "Amount"] = amount
     df.at[idx, "Type"] = category
     df.at[idx, "Person"] = person
     df.at[idx, "Description"] = description
-    df.at[idx, "Timestamp"] = timestamp
     save_data(df)
     return df
 
@@ -74,7 +74,7 @@ def clear_all():
     save_data(empty_df)
     return empty_df
 
-# Main app
+# Main App
 def main():
     st.title("💸 Expense Tracker")
     if not check_password():
@@ -82,7 +82,7 @@ def main():
 
     df = load_data()
 
-    # ➕ Add new
+    # ➕ Add Expense
     with st.expander("➕ Add New Expense", expanded=True):
         with st.form("add_form"):
             amount = st.text_input("Amount (₹)", placeholder="Enter amount")
@@ -92,9 +92,6 @@ def main():
 
             person = st.selectbox("Select Person", [""] + PEOPLE)
             description = st.text_input("Description (optional)", placeholder="e.g. Uber to airport")
-            date = st.date_input("Select Date", value=datetime.today())
-            time = st.time_input("Select Time", value=datetime.now().time())
-            timestamp = datetime.combine(date, time)
 
             submitted = st.form_submit_button("Add Expense")
             if submitted:
@@ -103,7 +100,7 @@ def main():
                 else:
                     try:
                         amount = float(amount)
-                        df = add_expense(df, amount, category, person, description, timestamp)
+                        df = add_expense(df, amount, category, person, description)
                         st.success(f"Added ₹{amount:.2f} for {category} by {person}.")
                         rerun()
                     except ValueError:
@@ -133,14 +130,11 @@ def main():
     # ✏️ Edit/Delete
     st.markdown("---")
     st.subheader("✏️ Edit / Delete Entry")
-    idx_options = display_df.index.tolist()
-    selected_idx = st.selectbox(
-        "Select an entry to edit or delete:",
-        options=idx_options,
-        format_func=lambda x: f"₹{display_df.at[x, 'Amount']} - {display_df.at[x, 'Type']} by {display_df.at[x, 'Person']} on {display_df.at[x, 'Timestamp']}"
-    )
+    idx_options = [""] + display_df.index.astype(str).tolist()
+    selected = st.selectbox("Select an entry to edit or delete:", options=idx_options)
 
-    if selected_idx is not None:
+    if selected:
+        selected_idx = int(selected)
         selected_row = display_df.loc[selected_idx]
         original_idx = display_df.at[selected_idx, "index"]
 
@@ -152,17 +146,13 @@ def main():
 
             new_person = st.selectbox("Edit Person", PEOPLE, index=PEOPLE.index(selected_row["Person"]) if selected_row["Person"] in PEOPLE else 0)
             new_description = st.text_input("Edit Description", value=selected_row.get("Description", ""))
-            old_datetime = pd.to_datetime(selected_row["Timestamp"])
-            new_date = st.date_input("Edit Date", value=old_datetime.date())
-            new_time = st.time_input("Edit Time", value=old_datetime.time())
-            new_timestamp = datetime.combine(new_date, new_time)
 
             col1, col2 = st.columns([1, 1])
             update_btn = col1.form_submit_button("Update Entry")
             delete_btn = col2.form_submit_button("Delete Entry", help="Warning: This will delete the entry!")
 
             if update_btn:
-                df = update_expense(df, original_idx, new_amount, new_category, new_person, new_description, new_timestamp)
+                df = update_expense(df, original_idx, new_amount, new_category, new_person, new_description)
                 st.success("Entry updated successfully!")
                 rerun()
 
