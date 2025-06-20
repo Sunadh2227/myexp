@@ -10,6 +10,23 @@ CSV_FILE = "expenses.csv"
 CATEGORIES = ["Food", "Entertainment", "Medical", "Shopping", "Groceries", "Travel"]
 PEOPLE = ["He", "She"]
 
+# 🔐 Password protection
+def check_password():
+    def password_entered():
+        if st.session_state["password"] == "2227":
+            st.session_state["authenticated"] = True
+        else:
+            st.session_state["authenticated"] = False
+            st.error("😕 Incorrect password")
+
+    if "authenticated" not in st.session_state:
+        st.session_state["authenticated"] = False
+
+    if not st.session_state["authenticated"]:
+        st.text_input("🔐 Enter password to access the tracker", type="password", key="password", on_change=password_entered)
+        return False
+    return True
+
 # Load or create data
 def load_data():
     if os.path.exists(CSV_FILE):
@@ -58,6 +75,10 @@ def clear_all():
 def main():
     st.title("💸 Expense Tracker")
 
+    # 🔐 Require password
+    if not check_password():
+        return
+
     df = load_data()
 
     # 1. Add new expense
@@ -76,7 +97,7 @@ def main():
                         amount = float(amount)
                         df = add_expense(df, amount, category, person)
                         st.success(f"Added ₹{amount:.2f} for {category} by {person}.")
-                        st.rerun()
+                        st.experimental_rerun()
                     except ValueError:
                         st.error("Please enter a valid numeric amount.")
 
@@ -100,16 +121,14 @@ def main():
 
     # 3. Expense history with edit/delete
     st.subheader("📜 Expense History")
-
     display_df = df.sort_values(by="Timestamp", ascending=False).reset_index()  # preserve original index
     display_df["Timestamp"] = pd.to_datetime(display_df["Timestamp"], errors="coerce")
     display_df["Timestamp"] = display_df["Timestamp"].dt.strftime("%Y-%m-%d %H:%M:%S")
     st.dataframe(display_df.drop(columns="index"), use_container_width=True)
 
-    # Select entry to edit or delete
+    # Edit/Delete Section
     st.markdown("---")
     st.subheader("✏️ Edit / Delete Entry")
-
     idx_options = display_df.index.tolist()
     selected_idx = st.selectbox(
         "Select an entry to edit or delete:",
@@ -133,14 +152,14 @@ def main():
             if update_btn:
                 df = update_expense(df, original_idx, new_amount, new_category, new_person)
                 st.success("Entry updated successfully!")
-                st.rerun()
+                st.experimental_rerun()
 
             if delete_btn:
                 df = delete_expense(df, original_idx)
                 st.success("Entry deleted successfully!")
-                st.rerun()
+                st.experimental_rerun()
 
-    # 4. Clear all history
+    # Clear All Section
     st.markdown("---")
     st.subheader("🧹 Clear All History")
     confirm = st.checkbox("I confirm to clear all expense history")
@@ -149,7 +168,7 @@ def main():
         if st.button("Clear History"):
             df = clear_all()
             st.success("All expense history cleared!")
-            st.rerun()
+            st.experimental_rerun()
 
 if __name__ == "__main__":
     main()
