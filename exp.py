@@ -9,7 +9,14 @@ CSV_FILE = "expenses.csv"
 CATEGORIES = ["Food", "Entertainment", "Medical", "Shopping", "Groceries", "Travel", "Other"]
 PEOPLE = ["He", "She"]
 
-# 🔐 Password protection
+# Rerun handler for compatibility
+def rerun():
+    if hasattr(st, "rerun"):
+        st.rerun()
+    else:
+        st.experimental_rerun()
+
+# Password protection
 def check_password():
     def password_entered():
         if st.session_state["password"] == "2227":
@@ -35,7 +42,7 @@ def load_data():
 def save_data(df):
     df.to_csv(CSV_FILE, index=False)
 
-# Add new entry
+# Data operations
 def add_expense(df, amount, category, person, description, timestamp):
     new_row = pd.DataFrame({
         "Amount": [amount],
@@ -48,7 +55,6 @@ def add_expense(df, amount, category, person, description, timestamp):
     save_data(df)
     return df
 
-# Update existing entry
 def update_expense(df, idx, amount, category, person, description, timestamp):
     df.at[idx, "Amount"] = amount
     df.at[idx, "Type"] = category
@@ -58,7 +64,6 @@ def update_expense(df, idx, amount, category, person, description, timestamp):
     save_data(df)
     return df
 
-# Delete and Clear
 def delete_expense(df, idx):
     df = df.drop(idx).reset_index(drop=True)
     save_data(df)
@@ -69,7 +74,7 @@ def clear_all():
     save_data(empty_df)
     return empty_df
 
-# App UI
+# Main app
 def main():
     st.title("💸 Expense Tracker")
     if not check_password():
@@ -77,7 +82,7 @@ def main():
 
     df = load_data()
 
-    # ➕ Add Expense
+    # ➕ Add new
     with st.expander("➕ Add New Expense", expanded=True):
         with st.form("add_form"):
             amount = st.text_input("Amount (₹)", placeholder="Enter amount")
@@ -100,7 +105,7 @@ def main():
                         amount = float(amount)
                         df = add_expense(df, amount, category, person, description, timestamp)
                         st.success(f"Added ₹{amount:.2f} for {category} by {person}.")
-                        st.experimental_rerun()
+                        rerun()
                     except ValueError:
                         st.error("Please enter a valid numeric amount.")
 
@@ -119,7 +124,7 @@ def main():
     col2.metric("📅 Today", f"₹{spent_today:.2f}")
     col3.metric("🗓️ This Month", f"₹{spent_month:.2f}")
 
-    # 📜 Expense History
+    # 📜 History
     st.subheader("📜 Expense History")
     display_df = df.sort_values(by="Timestamp", ascending=False).reset_index()
     display_df["Timestamp"] = pd.to_datetime(display_df["Timestamp"]).dt.strftime("%Y-%m-%d %H:%M:%S")
@@ -159,12 +164,12 @@ def main():
             if update_btn:
                 df = update_expense(df, original_idx, new_amount, new_category, new_person, new_description, new_timestamp)
                 st.success("Entry updated successfully!")
-                st.experimental_rerun()
+                rerun()
 
             if delete_btn:
                 df = delete_expense(df, original_idx)
                 st.success("Entry deleted successfully!")
-                st.experimental_rerun()
+                rerun()
 
     # 🧹 Clear All
     st.markdown("---")
@@ -174,7 +179,7 @@ def main():
         if st.button("Clear History"):
             df = clear_all()
             st.success("All expense history cleared!")
-            st.experimental_rerun()
+            rerun()
 
 if __name__ == "__main__":
     main()
